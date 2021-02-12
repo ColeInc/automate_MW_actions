@@ -1,7 +1,6 @@
 import os
 import datetime
 
-
 # ----------------------------------------------------------------------
 # Define directories here! (remember a / on the end of the path buddy):
 # ----------------------------------------------------------------------
@@ -13,11 +12,11 @@ archive_dir = 'C:/dev/Cole/Project Notes/Laminex Ecommerce - MW Actions/@ Python
 
 def list_files_in_exports_dir():
     # get a list of all filenames currently inside the unprocessed export.csv directory.
-
     print("Fetching list of CSV files to be processed...")
 
-    print("exports_dir: {}".format(exports_dir)) # delete
-    pass
+    file_list = os.listdir(exports_dir)
+    print("Found {} files!".format(len(file_list)))
+    return file_list
 
 
 def transform_exports_csv(filename):
@@ -30,7 +29,6 @@ def transform_exports_csv(filename):
             with open(exports_dir + filename) as file:
                 contents = file.read()
                 file.close()
-                # print(file.read())
 
                 ### removing first line "CORRELATION_ID,ORDERNUMBER_PAYLOAD,PAYLOAD" from file contents:
                 removed_first_line = contents.replace("CORRELATION_ID,ORDERNUMBER_PAYLOAD,PAYLOAD", "")
@@ -50,10 +48,16 @@ def transform_exports_csv(filename):
                 replaced_closings = replaced_openings.replace(closing_current, closing_new)
                 print("Replaced soap body closings!")
 
+                ### Checking for valid phone numbers:
+
+                    # maybe merge all 3 functions, phone/postcode/commas into one so only loop each line in payload once?
+
+                ### Checking for valid postcodes:
+
+
                 ### checking for extra commas which break the request separators. should only have 2 per line:
 
                 # replaced_closings = 'hello, there, my, name, is, cole, haha' # delete me
-
                 final_removed_commas = ""
                 line_num = 1
                 for line in replaced_closings.splitlines():
@@ -71,7 +75,7 @@ def transform_exports_csv(filename):
                             else:
                                 removed_commas += split_line[i]
                         final_removed_commas += removed_commas + "\n"
-                        # print("\ncommas were found in this part of the line:\n\n", ",".join(split_line[2:len(split_line)]), sep="")
+                        # print("\ncommas were found in this part of the line:\n\n", ",".join(split_line[0:len(split_line)]), sep="")
                         print("Commas were found in this part of the line:\n\n", split_line[len(split_line)-2], ",", split_line[len(split_line)-1][0:20], "\n", sep="")
                     line_num += 1
 
@@ -102,11 +106,11 @@ def main():
     print("Starting automate_MW_actions.py...")
     print("------------------------------------------------------")
 
-    # file_list = list_files_in_exports_dir()
+    file_list = list_files_in_exports_dir()
 
-    # for filename in file_list:
-    #     transform_exports_csv(filename)
+    for filename in file_list:
+        transform_exports_csv(filename)
 
-    transform_exports_csv('cats2.csv')
+    # transform_exports_csv('cats.csv')
 
 main()
