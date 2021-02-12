@@ -4,3 +4,5 @@ app/__PyCache__/
 .vscode/
 python - brief.txt
 exports_dir/
+output_dir/
+archive_dir/
