@@ -1,32 +1,33 @@
 import os
+import re
 import datetime
 
 # ----------------------------------------------------------------------
 # Define directories here! (remember a / on the end of the path buddy):
 # ----------------------------------------------------------------------
-exports_dir = 'C:/dev/Cole/Project Notes/Laminex Ecommerce - MW Actions/@ Python Script/exports_dir/'
+input_dir = 'C:/dev/Cole/Project Notes/Laminex Ecommerce - MW Actions/@ Python Script/exports_dir/'
 output_dir = 'C:/dev/Cole/Project Notes/Laminex Ecommerce - MW Actions/@ Python Script/output_dir/'
 archive_dir = 'C:/dev/Cole/Project Notes/Laminex Ecommerce - MW Actions/@ Python Script/archive_dir/'
 # ----------------------------------------------------------------------
 
 
-def list_files_in_exports_dir():
+def list_files_in_input_dir():
     # get a list of all filenames currently inside the unprocessed export.csv directory.
     print("Fetching list of CSV files to be processed...")
 
-    file_list = os.listdir(exports_dir)
+    file_list = os.listdir(input_dir)
     print("Found {} files!".format(len(file_list)))
     return file_list
 
 
 def transform_exports_csv(filename):
-    # for each file found inside list_files_in_exports_dir, transform its contents to the necessary output file.
+    # for each file found inside list_files_in_input_dir, transform its contents to the necessary output file.
 
     print("Reading contents of file --> {}".format(filename))
 
     try:
-        if os.path.isfile(exports_dir + filename):
-            with open(exports_dir + filename) as file:
+        if os.path.isfile(input_dir + filename):
+            with open(input_dir + filename) as file:
                 contents = file.read()
                 file.close()
 
@@ -48,19 +49,92 @@ def transform_exports_csv(filename):
                 replaced_closings = replaced_openings.replace(closing_current, closing_new)
                 print("Replaced soap body closings!")
 
-                ### Checking for valid phone numbers:
+                ### Looping each line in file (Checking Phone, Postcode, and extra Commas):
 
-                    # maybe merge all 3 functions, phone/postcode/commas into one so only loop each line in payload once?
-
-                ### Checking for valid postcodes:
-
-
-                ### checking for extra commas which break the request separators. should only have 2 per line:
-
-                # replaced_closings = 'hello, there, my, name, is, cole, haha' # delete me
+                # replaced_closings = 'hello, there, my, name, is, cole' # delete me
                 final_removed_commas = ""
                 line_num = 1
                 for line in replaced_closings.splitlines():
+
+                    ### Checking for valid phone numbers:
+
+                    line = 'this is a string where the substring "<ns2:phone>0407445979x</ns2:phone>" is repeated several <ns2:phoneNumber>yeet</ns2:phoneNumber> times'
+                    # line = 'this is a string where the substring "<ns2:phone/>" is repeated several <ns2:phoneNumber/>yeet</ns2:phoneNumber> times'
+                    # print([(a.start(), a.end()) for a in list(re.finditer('<ns2:phone', line))])
+                    # print([(line[a.start():a.start()+30]) for a in list(re.finditer('<ns2:phone', line))])
+
+                    for a in list(re.finditer('<ns2:phone', line)):
+                        # If we find an empty phone field, do nothing, otherwise fetch the value + its indexes from inbetween the tags:
+                        if line[a.start():a.start()+12] == "<ns2:phone/>":
+                            print("empty phone found, skipping") # delete
+
+                        elif line[a.start():a.start()+18] == "<ns2:phoneNumber/>":
+                            print("empty phoneNumber found, skipping") # delete
+
+                        else:
+                            print("line preview: ", line[a.start():a.start()+35])
+                            rest_of_line = line[a.start()+1:-1] # the + 1 removes first < from very start
+                            value_opening_index = rest_of_line.find(">")
+                            value_closing_index = rest_of_line.find("<")
+
+                            if (value_opening_index != -1) and (value_closing_index != -1):
+                                phone_value = rest_of_line[value_opening_index+1:value_closing_index]
+                            else:
+                                error_msg = "Invalid closing and opening >'s found when looking at <ns2:phone!!! very bad!"
+                                raise Exception(error_msg)
+
+                            if phone_value.isdigit(): # if it contains all numbers, its fine, let it slide
+                                pass
+                            else: # else, has some invalid characters, then we do the following:
+                                print("Invalid phone number found:\n--->", phone_value, "<---", sep="")
+                                requested_phone_value = input("what you want to change this field to fam?: ")
+                                # probably have a final confirmation prompt like:
+                                print("Are you sure you want to change the <ns2:phone field to:\n--->", requested_phone_value, "<---", sep="")
+                                confirmation = input("yes/no: ")
+
+                                # if confirmation in yes_list:
+                                #     final_phone_value = requested_phone_value
+                                #     # insert this back into final line value
+                                # elif confirmation in no_list:
+                                #
+
+
+
+                            # pass
+
+
+                    # for each line, loop through it and print all instances of <ns2:phone, etc.
+                    # need to somehow determine if the <ns2:phoneNumber> contains a value or not, E.g. if empty who cares, but if has value, then need...
+                    # ...to get the start and end indexes, store, them, so that we know which indexes to replace into at end
+                    # all possible inputs are:
+                    # <ns2:phoneNumber>yeet</ns2:phoneNumber>
+                    # <ns2:phoneNumber/>
+                    # <ns2:phone>yeet</ns2:phone>
+                    # <ns2:phone/>
+                    # if it contains all numbers, its fine, let it slide
+                    # else, has some invalid characters, then we do the following:
+                    # print(<ns2:phone + next 10 chars)
+                    # now ask user "are you happy with this?". accept any kind of input back similar to yes, yep, ya, etc.
+                    # name = input("are you happy with this?: ")
+                    # print("Hello", name + "!")
+                    # if answer is no, nope, etc. THEN prompt them again, this time asking what they want to replace it with
+                    # name = input("what you want to change this field to fam?: ")
+                    # probably have a final confirmation prompt like:
+                    # print("Are you sure you want to change this field <ns2:phone to: ", name + "!")
+                    # name = input("yes/no: ")
+                    # now have to replace the original value in this line with the new content we want added.
+
+
+
+                    ### Checking for valid postcodes:
+
+                    # pass
+
+
+                    ### checking for extra commas which break the request separators. should only have 2 per line:
+
+                    # this won't work once phone + postcode part is done, need to change input var, and be very careful of that final output varialbe final_removed_commas, because we still need to have the changes from the phone/postcode parts above.
+
                     comma_count = line.count(",")
                     if comma_count <= 2:
                         final_removed_commas += line + "\n"
@@ -79,17 +153,20 @@ def transform_exports_csv(filename):
                         print("Commas were found in this part of the line:\n\n", split_line[len(split_line)-2], ",", split_line[len(split_line)-1][0:20], "\n", sep="")
                     line_num += 1
 
-                ### write file contents to output file in output_dir:
 
-                now = datetime.datetime.now()
-                export_file_name = now.strftime("export_%Y%m%d_%H%M%S.csv")
 
-                with open(output_dir + export_file_name, 'w') as file:
-                    file.write(replaced_closings)
-                    file.close()
 
-                ### move successfully transformed file to archive_dir:
-                os.replace(exports_dir + filename, archive_dir + filename)
+                # ### write file contents to output file in output_dir:
+                #
+                # now = datetime.datetime.now()
+                # export_file_name = now.strftime("export_%Y%m%d_%H%M%S%f.csv")
+                #
+                # with open(output_dir + export_file_name, 'w') as file:
+                #     file.write(replaced_closings)
+                #     file.close()
+                #
+                # ### move successfully transformed file to archive_dir:
+                # os.replace(input_dir + filename, archive_dir + filename)
 
         else:
             print("Could not find file with name --> {}".format(filename))
@@ -106,11 +183,11 @@ def main():
     print("Starting automate_MW_actions.py...")
     print("------------------------------------------------------")
 
-    file_list = list_files_in_exports_dir()
+    # file_list = list_files_in_input_dir()
+    #
+    # for filename in file_list:
+    #     transform_exports_csv(filename)
 
-    for filename in file_list:
-        transform_exports_csv(filename)
-
-    # transform_exports_csv('cats.csv')
+    transform_exports_csv('cats.csv')
 
 main()
