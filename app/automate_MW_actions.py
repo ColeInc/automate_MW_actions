@@ -51,7 +51,7 @@ def transform_exports_csv(filename):
 
                 ### Looping each line in file (Checking Phone, Postcode, and extra Commas):
 
-                # replaced_closings = 'hello, there, my, name, is, cole' # delete me
+                # replaced_closings = 'hello, there, my, name, is, cole'    # line for testing extra commas
                 final_removed_commas = ""
                 yes_list = ['yes', 'ya', 'yep', 'yes pls', 'yas', 'ye', 'y', 'yes!']
                 no_list = ['no', 'n', 'nah', 'na', 'nope', 'no thanks']
@@ -60,26 +60,17 @@ def transform_exports_csv(filename):
 
                     ### Checking for valid phone numbers:
 
+                    # Test Lines:
                     line = 'this is a test line <ns2:postalCode>3427</ns2:postalCode> where their <ns2:phone>0407445979x</ns2:phone>are many <ns2:postalCode>cole</ns2:postalCode> values, and<ns2:phoneNumber/> this <ns2:postalCode/> sne<ns2:phoneNumber>yeet</ns2:phoneNumber>aky'
                     # line = 'this is a test line <ns2:postalCode>3427</ns2:postalCode> where their are many <ns2:postalCode>cole</ns2:postalCode> values, and this <ns2:postalCode/> sneaky'
                     # line = 'this is a string where the substring "<ns2:phone>0407445979x</ns2:phone>" is repeated several <ns2:phoneNumber>yeet</ns2:phoneNumber> times'
                     # line = 'this is a string where the substring "<ns2:phone/>" is repeated several <ns2:phoneNumber/>yeet</ns2:phoneNumber> times'
-                    # print([(a.start(), a.end()) for a in list(re.finditer('<ns2:phone', line))])
-                    # print([(line[a.start():a.start()+30]) for a in list(re.finditer('<ns2:phone', line))])
+
 
                     # for each instance we find "<ns2:phone" in the line:
-                    # edited_phone_line = ''
                     phone_offset = 0
-                    for a in list(re.finditer('<ns2:phone', line)):
 
-                        # use edited line if it has a value in it, otherwise just stick with original line value.
-                        # if len(edited_phone_line) > 0:
-                        #     line = edited_phone_line
-                        #     for b in list(re.finditer('<ns2:phone', edited_phone_line)):
-                        #         a = b
-                        #         break
-                        # may need to offload all uses of line variable below to another variable, so that the original line value isn't getting manipulated each iteration
-                        # print("line getting used: ", line)
+                    for a in list(re.finditer('<ns2:phone', line)):
 
                         # If we find an empty phone field, do nothing, otherwise fetch the value + its indexes from inbetween the tags:
                         if line[a.start()-phone_offset:a.start()+12-phone_offset] == "<ns2:phone/>":
@@ -92,8 +83,8 @@ def transform_exports_csv(filename):
                             rest_of_line = line[a.start()-phone_offset+1:] # the + 1 removes first < from very start
                             value_opening_index = rest_of_line.find(">")
                             value_closing_index = rest_of_line.find("<")
-                            original_opening_index = a.start()-phone_offset + value_opening_index + 2 # will have to calibrate these 1-2 indexes each way when replacing
-                            original_closing_index = a.start()-phone_offset + value_closing_index + 1 # will have to calibrate these 1-2 indexes each way when replacing
+                            original_opening_index = a.start()-phone_offset + value_opening_index + 2
+                            original_closing_index = a.start()-phone_offset + value_closing_index + 1
 
                             if (value_opening_index != -1) and (value_closing_index != -1):
                                 phone_value = rest_of_line[value_opening_index+1:value_closing_index]
@@ -104,7 +95,6 @@ def transform_exports_csv(filename):
                             if phone_value.isdigit(): # if it contains all numbers, its fine, let it slide
                                 pass
                             else: # else, has some invalid characters, then we do the following:
-                                # print("line preview: ", line[a.start():a.start()+35])
                                 print("Invalid phone number found:\n--->", phone_value, "<---", sep="")
 
                                 current_value_length = len(phone_value)
@@ -127,7 +117,6 @@ def transform_exports_csv(filename):
                                     else:
                                         confirmation = input("no input given! are you sure you want no value in this field? yes/no: ")
                                         if confirmation in yes_list:
-                                            # if the value i entered is fully blank, need to replace the line with <ns2:phone/>... or i guess <ns2:phone></ns2:phone> would work
                                             final_phone_value = '' # set final_phone_value as blank
                                             new_value_length = len(requested_phone_value)
                                             phone_offset = current_value_length - new_value_length + phone_offset
@@ -135,56 +124,15 @@ def transform_exports_csv(filename):
                                         elif confirmation in no_list:
                                             pass # takes us back to another while loop iteration asking for new input.
 
-                                # now have to replace the original value in this line with the new content we want added.
                                 line = line[0:original_opening_index] + final_phone_value + line[original_closing_index:]
-                                # print("first half:", line[0:original_opening_index])
-                                # print("end half:", line[original_closing_index:])
-                                print("NEW line preview: ", line[a.start():a.start()+35])
                                 print("FULL new_line: ", line)
-
-
-
-
-                    # for each line, loop through it and print all instances of <ns2:phone, etc.
-                    # need to somehow determine if the <ns2:phoneNumber> contains a value or not, E.g. if empty who cares, but if has value, then need...
-                    # ...to get the start and end indexes, store, them, so that we know which indexes to replace into at end
-                    # all possible inputs are:
-                    # <ns2:phoneNumber>yeet</ns2:phoneNumber>
-                    # <ns2:phoneNumber/>
-                    # <ns2:phone>yeet</ns2:phone>
-                    # <ns2:phone/>
-                    # if it contains all numbers, its fine, let it slide
-                    # else, has some invalid characters, then we do the following:
-                    # print(<ns2:phone + next 10 chars)
-                    # now ask user "are you happy with this?". accept any kind of input back similar to yes, yep, ya, etc.
-                    # name = input("are you happy with this?: ")
-                    # print("Hello", name + "!")
-                    # if answer is no, nope, etc. THEN prompt them again, this time asking what they want to replace it with
-                    # name = input("what you want to change this field to fam?: ")
-                    # probably have a final confirmation prompt like:
-                    # print("Are you sure you want to change this field <ns2:phone to: ", name + "!")
-                    # name = input("yes/no: ")
-                    # now have to replace the original value in this line with the new content we want added.
-
-                    # line = edited_phone_line
 
                     ### Checking for valid postcodes:
 
                     # for each instance we find "<ns2:post" in the line:
-
-                    # edited_postcode_line = ''
                     postcode_offset = 0
 
                     for a in list(re.finditer('<ns2:post', line)):
-
-                        # use edited line if it has a value in it, otherwise just stick with original line value.
-                        # if len(edited_postcode_line) > 0:
-                        #     line = edited_postcode_line
-                        #     for b in list(re.finditer('<ns2:post', edited_postcode_line)):
-                        #         a = b
-                        #         break
-                        # may need to offload all uses of line variable below to another variable, so that the original line value isn't getting manipulated each iteration
-                        # print("line getting used: ", line)
 
                         # If we find an empty postcode field, do nothing, otherwise fetch the value + its indexes from inbetween the tags:
                         if line[a.start()-postcode_offset:a.start()+17-postcode_offset] == "<ns2:postalCode/>":
@@ -192,9 +140,7 @@ def transform_exports_csv(filename):
                         else:
                             print("line preview: ", line[a.start()-postcode_offset:a.start()+35-postcode_offset])
 
-                            # print("BEFORE rest_of_line: ", line[a.start():])
                             rest_of_line = line[a.start()-postcode_offset+1:] # the + 1 removes first < from very start
-                            # print("rest_of_line: ", rest_of_line)
                             value_opening_index = rest_of_line.find(">")
                             value_closing_index = rest_of_line.find("<")
                             original_opening_index = a.start()-postcode_offset + value_opening_index + 2
@@ -210,7 +156,6 @@ def transform_exports_csv(filename):
                                 print("valid postcode found, letting it past")
                                 pass
                             else: # else, has some invalid characters, then we do the following:
-                                # print("line preview: ", line[a.start()+postcode_offset:a.start()+35+postcode_offset])
                                 print("Invalid postcode found:\n--->", postcode_value, "<---", sep="")
 
                                 current_value_length = len(postcode_value)
@@ -241,23 +186,11 @@ def transform_exports_csv(filename):
                                         elif confirmation in no_list:
                                             pass # takes us back to another while loop iteration asking for new input.
 
-                                # now have to replace the original value in this line with the new content we want added.
                                 line = line[0:original_opening_index] + postcode_value + line[original_closing_index:]
-                                # print("first half:", line[0:original_opening_index])
-                                # print("end half:", line[original_closing_index:])
-                                # print("NEW postcode line preview: ", edited_postcode_line[a.start():a.start()+35])
-                                print("FULL new_line: ", line)
+                                print("FULL new_line: ", line) # delete
 
-
-
-
-
-                    # line = edited_postcode_line # final line value after postcode section
-                    # print("FINAL LINE:", line)
 
                     ### checking for extra commas which break the request separators. should only have 2 per line:
-
-                    # this won't work once phone + postcode part is done, need to change input var, and be very careful of that final output varialbe final_removed_commas, because we still need to have the changes from the phone/postcode parts above.
 
                     comma_count = line.count(",")
                     if comma_count <= 2:
@@ -278,9 +211,6 @@ def transform_exports_csv(filename):
                     line_num += 1
 
 
-                    # here we actually have to write each individual edited line back into the file... idk how to do that.
-
-
                 # ### write file contents to output file in output_dir:
 
                 now = datetime.datetime.now()
@@ -291,7 +221,7 @@ def transform_exports_csv(filename):
                     file.close()
 
                 ### move successfully transformed file to archive_dir:
-                # os.replace(input_dir + filename, archive_dir + filename)
+                os.replace(input_dir + filename, archive_dir + filename)
 
         else:
             print("Could not find file with name --> {}".format(filename))
