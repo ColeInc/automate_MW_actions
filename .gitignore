@@ -6,3 +6,5 @@ python - brief.txt
 exports_dir/
 output_dir/
 archive_dir/
+Backups/
+credentials.json

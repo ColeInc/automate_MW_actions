@@ -1,6 +1,8 @@
 import os
 import re
+import json
 import datetime
+import cx_Oracle
 
 # ----------------------------------------------------------------------
 # Define directories here! (remember a / on the end of the path buddy):
@@ -9,6 +11,95 @@ input_dir = 'C:/dev/Cole/Project Notes/Laminex Ecommerce - MW Actions/@ Python S
 output_dir = 'C:/dev/Cole/Project Notes/Laminex Ecommerce - MW Actions/@ Python Script/output_dir/'
 archive_dir = 'C:/dev/Cole/Project Notes/Laminex Ecommerce - MW Actions/@ Python Script/archive_dir/'
 # ----------------------------------------------------------------------
+
+
+def fetch_UUIDs_from_csv():
+    pass
+
+    # - Read in the csv file from directory, I will save it manually from roger's email
+    # - fetch UUID list from csv
+    # - fetch orderNo for each UUID from the list too bc i need it for backup SQL statement! probs need to pass them through as lists then
+    # - close excel file (important for MOVE.bat later)
+
+
+def get_audit_db_original_requests(UUIDs):
+
+    ### fetch database credentials:
+    print("Fetching Database credentials from file...")
+
+    credentials_path = 'C:/dev/Cole/Project Notes/Laminex Ecommerce - MW Actions/@ Python Script/credentials.json'
+
+    if os.path.isfile(credentials_path):
+        with open(credentials_path) as file:
+            data = json.load(file)
+            hostname = data['hostname']
+            username = data['username']
+            password = data['password']
+            service_name = data['service_name']
+            port = data['port']
+            file.close()
+            print("Credentials fetched!")
+    else:
+        print("credentials_path.json not found!")
+        return False, "credentials_path.json not found!"
+
+    # Create a table in Oracle database
+    try:
+        print("Querying middleware database...")
+        conn_str = '{0}/{1}@{2}:{3}/{4}'.format(username, password, hostname, port, service_name)
+        # print(conn_str)
+        cx_Oracle.init_oracle_client("C:/dev/Program Files/instantclient_19_10/")
+        con = cx_Oracle.connect(conn_str)
+        cursor = con.cursor()
+
+        format_strings = ','.join(["'%s'"] * len(UUIDs)) # creates template of comma separated %s that is n values long depending how many UUIDs we are searching
+        sql = '''
+        SELECT a.correlation_id,
+        (select TO_CHAR(substr(b.payload,instr(b.payload,'erpOrderNumber>')+15 ,7)) from audit_log_details b where b.phase = 'FINAL' and b.STATE = 'FINISHED' and b.correlation_id = a.correlation_id) as ordernumber_Payload,
+        (select c.payload from audit_log_details c where c.comments ='Create Sample Order Orchestration start process' and
+        c.correlation_id=a.correlation_id and ROWNUM <= 1) as payload
+        from audit_log_Details a where a.phase = 'WAIVENET' and a.STATE = 'ERROR'
+        and a.correlation_id in (%s) order by a.correlation_id
+        '''  % (format_strings) % tuple(UUIDs)
+        cursor.execute(sql)
+
+        for row in cursor:
+            print("UUID: ", row[0], "\nOrderNo: ", row[1], "\nPayload: ", row[2], sep="")
+
+        print("Database SELECT v1 performed successfully")
+        
+
+        ### backup query if nothing was returned for one of the UUIDs:
+
+        # change this to actual list of failed UUIDs:
+        failed_UUIDs = ['bd4cc1fc-81f7-4aa8-9172-98e30e56dd89', 'ef5980b7-eebb-4dfc-8d31-20239fd8dbef']
+
+        # could maybe just iterate the corresponding orderNo's at the final for loop printing the values below.
+
+        format_strings = ','.join(["'%s'"] * len(failed_UUIDs)) # creates template of comma separated %s that is n values long depending how many UUIDs we are searching
+        sql = '''
+        SELECT correlation_id, '%s' as OrderNo, payload FROM audit_log_details
+        WHERE STATE = 'START' and PHASE = 'CREATESAMPLORDR-ORCH'
+        and correlation_id in (%s) order by correlation_id
+        '''  % ("make this orderNo...", format_strings) % tuple(UUIDs)
+        cursor.execute(sql)
+
+        for row in cursor:
+            print("UUID: ", row[0], "\nOrderNo: ", row[1], "\nPayload: ", row[2], sep="")
+
+        print("Database SELECT v2 performed successfully")
+
+
+    except cx_Oracle.DatabaseError as e:
+        print("\nERROR in Oracle Database Query:\n\n", e, "\n", sep="")
+
+    # by writing finally if any error occurs
+    # then also we can close the all database operation
+    finally:
+        if cursor:
+            cursor.close()
+        if con:
+            con.close()
 
 
 def list_files_in_input_dir():
@@ -51,21 +142,23 @@ def transform_exports_csv(filename):
 
                 ### Looping each line in file (Checking Phone, Postcode, and extra Commas):
 
+                # --------------------------
+                # Test Lines:
+                # --------------------------
                 # replaced_closings = 'hello, there, my, name, is, cole'    # line for testing extra commas
-                final_removed_commas = ""
+                line = 'this is a test line <ns2:postalCode>3427</ns2:postalCode> where their <ns2:phone>0407445979x</ns2:phone>are many <ns2:postalCode>cole</ns2:postalCode> values, and<ns2:phoneNumber/> this <ns2:postalCode/> sne<ns2:phoneNumber>yeet</ns2:phoneNumber>aky'
+                # line = 'this is a test line <ns2:postalCode>3427</ns2:postalCode> where their are many <ns2:postalCode>cole</ns2:postalCode> values, and this <ns2:postalCode/> sneaky'
+                # line = 'this is a string where the substring "<ns2:phone>0407445979x</ns2:phone>" is repeated several <ns2:phoneNumber>yeet</ns2:phoneNumber> times'
+                # line = 'this is a string where the substring "<ns2:phone/>" is repeated several <ns2:phoneNumber/>yeet</ns2:phoneNumber> times'
+                # --------------------------
+
                 yes_list = ['yes', 'ya', 'yep', 'yes pls', 'yas', 'ye', 'y', 'yes!']
                 no_list = ['no', 'n', 'nah', 'na', 'nope', 'no thanks']
+                final_removed_commas = ""
                 line_num = 1
                 for line in replaced_closings.splitlines():
 
                     ### Checking for valid phone numbers:
-
-                    # Test Lines:
-                    line = 'this is a test line <ns2:postalCode>3427</ns2:postalCode> where their <ns2:phone>0407445979x</ns2:phone>are many <ns2:postalCode>cole</ns2:postalCode> values, and<ns2:phoneNumber/> this <ns2:postalCode/> sne<ns2:phoneNumber>yeet</ns2:phoneNumber>aky'
-                    # line = 'this is a test line <ns2:postalCode>3427</ns2:postalCode> where their are many <ns2:postalCode>cole</ns2:postalCode> values, and this <ns2:postalCode/> sneaky'
-                    # line = 'this is a string where the substring "<ns2:phone>0407445979x</ns2:phone>" is repeated several <ns2:phoneNumber>yeet</ns2:phoneNumber> times'
-                    # line = 'this is a string where the substring "<ns2:phone/>" is repeated several <ns2:phoneNumber/>yeet</ns2:phoneNumber> times'
-
 
                     # for each instance we find "<ns2:phone" in the line:
                     phone_offset = 0
@@ -238,11 +331,27 @@ def main():
     print("Starting automate_MW_actions.py...")
     print("------------------------------------------------------")
 
+    # fetch UUIDs of failed orders from email attachment CSV:
+    # resp = fetch_UUIDs_from_csv()
+    # # convert this to single line if statement:
+    # if not(resp[0]):
+    #     return
+    # else:
+    #     UUIDs = resp[1]
+    #
+    # # query audit database for the original requests of these orders:
+    # resp = get_audit_db_original_requests(UUIDs)
+    # if not(resp[0]):
+    #     return
+
+    get_audit_db_original_requests(['776606eb-67f3-4ac0-ba34-996e55d0e7b8','625af53b-8ca3-4f52-9dd9-d801a780a1f3'])
+
+    # # get list of all files inside the input_dir currently
     # file_list = list_files_in_input_dir()
     #
     # for filename in file_list:
     #     transform_exports_csv(filename)
 
-    transform_exports_csv('cats.csv')
+    # transform_exports_csv('cats.csv')
 
 main()
