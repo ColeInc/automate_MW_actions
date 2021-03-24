@@ -3,6 +3,7 @@ import re
 import json
 import datetime
 import cx_Oracle
+import pandas as pd
 
 # ----------------------------------------------------------------------
 # Define directories here! (remember a / on the end of the path buddy):
@@ -13,13 +14,47 @@ archive_dir = 'C:/dev/Cole/Project Notes/Laminex Ecommerce - MW Actions/@ Python
 # ----------------------------------------------------------------------
 
 
-def fetch_UUIDs_from_csv():
-    pass
+def fetch_UUIDs_from_csv(file_list):
 
-    # - Read in the csv file from directory, I will save it manually from roger's email
-    # - fetch UUID list from csv
-    # - fetch orderNo for each UUID from the list too bc i need it for backup SQL statement! probs need to pass them through as lists then
-    # - close excel file (important for MOVE.bat later)
+    final_UUID_dict = {}
+
+    for filename in file_list:
+
+        if filename[0] == "~":
+            continue
+        # print(filename)
+
+        df1 = pd.read_excel(input_dir + filename, sheet_name = 'Sheet1')
+        # print(df1)
+
+        UUID_header_cell = []
+        orderNo_header_cell = []
+        valid_UUID_headings = ["UUID", "Z1RRUKEY"]
+        valid_orderNo_headings = ["ERP Order #", "Order #", "Z1RRORNO"]
+
+        for row in range(df1.shape[0]): # df1.shape is the entire dimensions of the spreadsheet. E.g. 3x19 (square around all cells with data in them)
+            for col in range(df1.shape[1]):
+                if df1.iloc[row, col] in valid_UUID_headings: # finding the column heading for the UUID column
+                    # print("UUID HEADER CELL ---->", row, col)
+                    UUID_header_cell += [row, col]
+                elif str(df1.iloc[row, col]) in valid_orderNo_headings: # finding the column heading for the Order # column
+                    # print("orderNo HEADER CELL ---->", row, col)
+                    orderNo_header_cell += [row, col]
+        
+        # for i in the ROW value inside UUID_header_cell minus 1, iterate and print the row, col of only the 1 column we found under it. print the value with iloc.
+        
+        for i in range(df1.shape[0] - (UUID_header_cell[0]+1)):
+
+            print("cell we are looking up:", i+UUID_header_cell[0]+1, UUID_header_cell[1])
+            current_uuid = df1.iloc[i+UUID_header_cell[0]+1, UUID_header_cell[1]]
+            
+            print("cell we are looking up v2:", i+orderNo_header_cell[0]+1, orderNo_header_cell[1])
+            current_orderNo = str(df1.iloc[i+orderNo_header_cell[0]+1, orderNo_header_cell[1]])
+
+            final_UUID_dict[current_uuid] = current_orderNo
+        
+    # print("final_UUID_dict: ", final_UUID_dict)
+    return final_UUID_dict
 
 
 def get_audit_db_original_requests(UUIDs):
@@ -197,6 +232,8 @@ def transform_exports_csv(filename):
                             print("empty phoneNumber found, skipping") # delete
 
                         else:
+                            print("line preview: ", line[a.start()-phone_offset:a.start()+35-phone_offset])
+
                             rest_of_line = line[a.start()-phone_offset+1:] # the + 1 removes first < from very start
                             value_opening_index = rest_of_line.find(">")
                             value_closing_index = rest_of_line.find("<")
@@ -210,6 +247,7 @@ def transform_exports_csv(filename):
                                 raise Exception(error_msg)
 
                             if phone_value.isdigit(): # if it contains all numbers, its fine, let it slide
+                                print("valid phone number found, letting it past")
                                 pass
                             else: # else, has some invalid characters, then we do the following:
                                 print("Invalid phone number found:\n--->", phone_value, "<---", sep="")
@@ -569,15 +607,26 @@ def main():
     # if not(resp[0]):
     #     return
 
-    dummy_dict = {"776606eb-67f3-4ac0-ba34-996e55d0e7b8": "4251138", "625af53b-8ca3-4f52-9dd9-d801a780a1f3": "4251166"}
-    # dummy_dict = {"776606eb-67f3-4ac0-ba34-996e55d0e7b8": "4251138", "ef5980b7-eebb-4dfc-8d31-20239fd8dbef": "4251166"}
+    # get list of all files inside the input_dir currently
+    file_list = list_files_in_input_dir()
+    UUID_list = fetch_UUIDs_from_csv(file_list)
 
-    contents = get_audit_db_original_requests(dummy_dict)
-    transform_exports_csv_v2(contents)
+    # UUID_list = {"776606eb-67f3-4ac0-ba34-996e55d0e7b8": "4251138", "625af53b-8ca3-4f52-9dd9-d801a780a1f3": "4251166"}
+    # UUID_list = {"776606eb-67f3-4ac0-ba34-996e55d0e7b8": "4251138", "ef5980b7-eebb-4dfc-8d31-20239fd8dbef": "4251166"}
+    # UUID_list = {"e18dbbd2-3c8f-47c5-bc5e-711cd9b5a8f8": "4272926"}
+    # UUID_list = {
+    # "44925cf2-330a-4bd2-8959-9bf242abde33": "4269854",
+    # "5ef6e126-be3c-46a3-9c60-3953dbdeec04": "4270108",
+    # "4320cdaa-1c4a-48c2-b6fe-aa588e864b43": "4271611",
+    # "3eef8dae-0de5-46d4-8264-43c699c4bb0a": "4271669",
+    # "654f4315-3da9-479d-bfb3-3421a199e6ca": "4271672",
+    # "feba1a03-999e-4578-8d79-6163575f9816": "4271680"
+    # }
 
-    # # get list of all files inside the input_dir currently
+    # contents = get_audit_db_original_requests(UUID_list)
+    # transform_exports_csv_v2(contents)
+
     # file_list = list_files_in_input_dir()
-    #
     # for filename in file_list:
     #     transform_exports_csv(filename)
 
