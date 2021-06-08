@@ -4,6 +4,7 @@ import json
 import time
 import requests
 import datetime
+import traceback
 import cx_Oracle
 import pandas as pd
 
@@ -38,7 +39,7 @@ def fetch_UUIDs_from_csv(file_list):
         UUID_header_cell = []
         orderNo_header_cell = []
         valid_UUID_headings = ["UUID", "Z1RRUKEY"]
-        valid_orderNo_headings = ["ERP Order #", "Order #", "Z1RRORNO"]
+        valid_orderNo_headings = ["ERP Order #", "Order #", "Z1RRORNO", "OrderNo"]
 
         for row in range(df1.shape[0]): # df1.shape is the entire dimensions of the spreadsheet. E.g. 3x19 (square around all cells with data in them)
             for col in range(df1.shape[1]):
@@ -96,15 +97,16 @@ def get_audit_db_original_requests(UUIDs):
 
         total_records = len(UUIDs)
         # UUIDs = {"776606eb-67f3-4ac0-ba34-996e55d0e7b8": "4251138", "ef5980b7-eebb-4dfc-8d31-20239fd8dbef": "4251166"} # delete
+        # print("UUIDs.keys()", UUIDs.keys())
 
         format_strings = ','.join(["'%s'"] * total_records) # creates template of comma separated %s that is n values long depending how many UUIDs we are searching
         sql = '''
-        SELECT a.correlation_id,
+        SELECT DISTINCT a.correlation_id,
         (select TO_CHAR(substr(b.payload,instr(b.payload,'erpOrderNumber>')+15 ,7)) from audit_log_details b where b.phase = 'FINAL' and b.STATE = 'FINISHED' and b.correlation_id = a.correlation_id) as ordernumber_Payload,
         (select c.payload from audit_log_details c where c.comments ='Create Sample Order Orchestration start process' and
         c.correlation_id=a.correlation_id and ROWNUM <= 1) as payload
         from audit_log_Details a where a.phase = 'WAIVENET' and a.STATE = 'ERROR'
-        and a.correlation_id in (%s) order by a.correlation_id
+        and a.correlation_id in (%s) GROUP BY a.correlation_id ORDER BY a.correlation_id
         '''  % (format_strings) % tuple(UUIDs.keys())
         cursor.execute(sql)
 
@@ -184,7 +186,7 @@ def transform_exports_csv(filename):
 
     try:
         if os.path.isfile(input_dir + filename):
-            with open(input_dir + filename) as file:
+            with open(input_dir + filename, encoding="utf-8") as file:
                 contents = file.read()
                 file.close()
 
@@ -378,7 +380,7 @@ def transform_exports_csv(filename):
                 now = datetime.datetime.now()
                 export_file_name = now.strftime("export_%Y%m%d_%H%M%S%f.csv")
 
-                with open(output_dir + export_file_name, 'w') as file:
+                with open(output_dir + export_file_name, 'w', encoding="utf-8") as file:
                     file.write(final_removed_commas)
                     file.close()
 
@@ -584,7 +586,7 @@ def transform_exports_csv_v2(contents):
         now = datetime.datetime.now()
         export_file_name = now.strftime("export_%Y%m%d_%H%M%S%f.csv")
 
-        with open(output_dir + export_file_name, 'w') as file:
+        with open(output_dir + export_file_name, 'w', encoding="utf-8") as file:
             file.write(final_removed_commas)
             file.close()
 
@@ -599,6 +601,7 @@ def transform_exports_csv_v2(contents):
     except Exception as e:
         print("------------------------------------------------------")
         print("Error while transforming csv file:\n", e)
+        print(traceback.format_exc())
         print("------------------------------------------------------")
 
 
