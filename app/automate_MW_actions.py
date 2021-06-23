@@ -39,7 +39,7 @@ def fetch_UUIDs_from_csv(file_list):
         UUID_header_cell = []
         orderNo_header_cell = []
         valid_UUID_headings = ["UUID", "Z1RRUKEY"]
-        valid_orderNo_headings = ["ERP Order #", "Order #", "Z1RRORNO", "OrderNo"]
+        valid_orderNo_headings = ["ERP Order #", "Order #", "Z1RRORNO", "OrderNo", "Order#"]
 
         for row in range(df1.shape[0]): # df1.shape is the entire dimensions of the spreadsheet. E.g. 3x19 (square around all cells with data in them)
             for col in range(df1.shape[1]):
@@ -62,7 +62,7 @@ def fetch_UUIDs_from_csv(file_list):
 
             final_UUID_dict[current_uuid] = current_orderNo
         
-    # print("final_UUID_dict: ", final_UUID_dict)
+    print("final_UUID_dict: ", final_UUID_dict)
     return final_UUID_dict
 
 
@@ -143,7 +143,7 @@ def get_audit_db_original_requests(UUIDs):
         format_strings = ','.join(["'%s'"] * len(failed_UUIDs)) # creates template of comma separated %s that is n values long depending how many UUIDs we are searching
         sql = '''
         SELECT correlation_id, payload FROM audit_log_details
-        WHERE STATE = 'START' and PHASE = 'CREATESAMPLORDR-ORCH'
+        WHERE STATE = 'START' and (PHASE = 'CREATESAMPLORDR-ORCH' or PHASE = 'CREATESAMPLEORDERORC')
         and correlation_id in (%s) order by correlation_id
         '''  % format_strings % tuple(failed_UUIDs.keys())
         cursor.execute(sql)
