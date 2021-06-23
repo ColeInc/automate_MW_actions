@@ -465,9 +465,26 @@ def transform_exports_csv_v2(contents):
                     else: # else, has some invalid characters, then we do the following:
                         print("Invalid phone number found:\n--->", phone_value, "<---", sep="")
 
+
                         current_value_length = len(phone_value)
                         final_phone_value = ''
                         valid = False
+
+
+                        # custom function to try remove common syntax errors in phone nuymber:
+                        attempted_valid_phone = translate_to_valid_phone(phone_value)
+                        print("Tried fixing the format for you, does this look okay now?:\n--->", attempted_valid_phone, "<---", sep="")
+                        confirmation = input("yes/no: ")
+                        if (confirmation in yes_list) and attempted_valid_phone.isdigit():
+                            final_phone_value = attempted_valid_phone
+                            new_value_length = len(attempted_valid_phone)
+                            phone_offset = current_value_length - new_value_length + phone_offset
+                            valid = True
+                        else:
+                            print("Invalid phone number found:\n--->", phone_value, "<---", sep="")
+
+
+                        # regular OG phone number check (section above this is new):
                         while not valid:
                             requested_phone_value = input("what you want to change this field to buddy?: ")
                             if len(requested_phone_value) > 0:
@@ -661,6 +678,21 @@ def post_to_ConverterProxy(payload_list, UUID_list):
             time.sleep(2)
 
 
+def translate_to_valid_phone(phone_value):
+
+    # remove + symbols & any space characters:
+    new_phone_value = phone_value.translate({ord(i): None for i in '+ '})
+
+    # convert capital O's to 0s
+    new_phone_value = re.sub("[O]", "0", new_phone_value)
+
+    # remove all non-numeric values for whatever reason they made it in:
+    new_phone_value = re.sub("[^0-9]", "", new_phone_value)
+
+    # print(new_phone_value)
+    return new_phone_value
+
+
 def main():
     print("------------------------------------------------------")
     print("Starting automate_MW_actions.py...")
@@ -679,15 +711,17 @@ def main():
     # if not(resp[0]):
     #     return
 
+    # UUID_list = {"776606eb-67f3-4ac0-ba34-996e55d0e7b8": "4251138", "625af53b-8ca3-4f52-9dd9-d801a780a1f3": "4251166"}
+    # UUID_list = {"e18dbbd2-3c8f-47c5-bc5e-711cd9b5a8f8": "4272926"}
+
     # get list of all files inside the input_dir currently
     file_list = list_files_in_input_dir()
     UUID_list = fetch_UUIDs_from_csv(file_list)
 
-    # UUID_list = {"776606eb-67f3-4ac0-ba34-996e55d0e7b8": "4251138", "625af53b-8ca3-4f52-9dd9-d801a780a1f3": "4251166"}
-    # UUID_list = {"e18dbbd2-3c8f-47c5-bc5e-711cd9b5a8f8": "4272926"}
-
     contents = get_audit_db_original_requests(UUID_list)
     final_payload_list = transform_exports_csv_v2(contents)
+
+    # translate_to_valid_phone('+OOO6198 534 85asadds@(*&!(*(7')
 
     # # # UUID_list = {"74a780cb-3cb2-4c0c-b67f-54de8872ded6": "4287411", "84a780cb-3cb2-4c0c-b67f-54de8872ded6": "4287411"}
     # # # final_payload_list = ['74a780cb-3cb2-4c0c-b67f-54de8872ded6,4287411,<soapenv:Body xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:lam="http://fbu.com/BuildingProducts/LaminexEcomSampleProductOrchestrator" xmlns:com="http://fbu.com/common"><ns2:createOrderRequest xmlns:ns2="http://fbu.com/BuildingProducts/LaminexEcomSampleProductOrchestrator"><ns2:erpId>AU-1067063</ns2:erpId><ns2:leadId/><ns2:salesforceCompanyId>0010X00004Ry1jWQAR</ns2:salesforceCompanyId><ns2:userId>0030X00002T9uJiQAJ</ns2:userId><ns2:userName>janetgrahaminteriors@gmail.com</ns2:userName><ns2:orderNo/><ns2:phoneNumber/><ns2:orderTotal>0.0</ns2:orderTotal><ns2:optIn/><ns2:processId>ef6ab9fb-bb75-480c-8a94-3169f917cc80</ns2:processId><ns2:relatedProjectInformation>Mosman home+Residential Renovation</ns2:relatedProjectInformation><ns2:creationTime>2021-03-30T12:57:57.211GMT+11</ns2:creationTime><ns2:order><ns2:line><ns2:lineNumber>1</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4507-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>2</ns2:orderQty><ns2:description>Milano Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Milano Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>2</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0489-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Pure Cloud</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Pure Cloud</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>3</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4508-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Perla Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Perla Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>4</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0476-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Calcite</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Calcite</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>5</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0478-MAT-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Carrara</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Matte</ns2:finish><ns2:color>Carrara</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>6</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4508-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Perla Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Perla Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line></ns2:order><ns2:deliveryAddress><ns2:salutation/><ns2:businessName/><ns2:firstName>Janet</ns2:firstName><ns2:lastName>Graham</ns2:lastName><ns2:line1>2A River St</ns2:line1><ns2:line2/><ns2:line3/><ns2:line4/><ns2:city>Birchgrove</ns2:city><ns2:suburb>Birchgrove</ns2:suburb><ns2:state>NSW</ns2:state><ns2:postalCode>2041</ns2:postalCode><ns2:country/><ns2:instructions/><ns2:phone></ns2:phone></ns2:deliveryAddress><ns2:lead><ns2:firstName/><ns2:lastName/><ns2:company/><ns2:aboutMe>AnD-Interior Designer</ns2:aboutMe><ns2:emailOptIn/><ns2:contactByFabricator/><ns2:description/><ns2:Project><ns2:name/><ns2:location/></ns2:Project><ns2:Contact><ns2:title/><ns2:email/><ns2:phone/><ns2:street/><ns2:city/><ns2:state/><ns2:postalCode/></ns2:Contact></ns2:lead><ns2:TraceInfo><com:processId xmlns:com="http://fbu.com/common">74a780cb-3cb2-4c0c-b67f-54de8872ded6</com:processId><com:processName xmlns:com="http://fbu.com/common">LaminexCreateSampleOrder</com:processName><com:uniqueIdentifier xmlns:com="http://fbu.com/common"/></ns2:TraceInfo></ns2:createOrderRequest></soapenv:Body>', '84a780cb-3cb2-4c0c-b67f-54de8872ded6,4287411,<soapenv:Body xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:lam="http://fbu.com/BuildingProducts/LaminexEcomSampleProductOrchestrator" xmlns:com="http://fbu.com/common"><ns2:createOrderRequest xmlns:ns2="http://fbu.com/BuildingProducts/LaminexEcomSampleProductOrchestrator"><ns2:erpId>AU-1067063</ns2:erpId><ns2:leadId/><ns2:salesforceCompanyId>0010X00004Ry1jWQAR</ns2:salesforceCompanyId><ns2:userId>0030X00002T9uJiQAJ</ns2:userId><ns2:userName>janetgrahaminteriors@gmail.com</ns2:userName><ns2:orderNo/><ns2:phoneNumber/><ns2:orderTotal>0.0</ns2:orderTotal><ns2:optIn/><ns2:processId>ef6ab9fb-bb75-480c-8a94-3169f917cc80</ns2:processId><ns2:relatedProjectInformation>Mosman home+Residential Renovation</ns2:relatedProjectInformation><ns2:creationTime>2021-03-30T12:57:57.211GMT+11</ns2:creationTime><ns2:order><ns2:line><ns2:lineNumber>1</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4507-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>2</ns2:orderQty><ns2:description>Milano Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Milano Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>2</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0489-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Pure Cloud</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Pure Cloud</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>3</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4508-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Perla Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Perla Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>4</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0476-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Calcite</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Calcite</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>5</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0478-MAT-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Carrara</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Matte</ns2:finish><ns2:color>Carrara</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>6</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4508-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Perla Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Perla Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line></ns2:order><ns2:deliveryAddress><ns2:salutation/><ns2:businessName/><ns2:firstName>Janet</ns2:firstName><ns2:lastName>Graham</ns2:lastName><ns2:line1>2A River St</ns2:line1><ns2:line2/><ns2:line3/><ns2:line4/><ns2:city>Birchgrove</ns2:city><ns2:suburb>Birchgrove</ns2:suburb><ns2:state>NSW</ns2:state><ns2:postalCode>2041</ns2:postalCode><ns2:country/><ns2:instructions/><ns2:phone></ns2:phone></ns2:deliveryAddress><ns2:lead><ns2:firstName/><ns2:lastName/><ns2:company/><ns2:aboutMe>AnD-Interior Designer</ns2:aboutMe><ns2:emailOptIn/><ns2:contactByFabricator/><ns2:description/><ns2:Project><ns2:name/><ns2:location/></ns2:Project><ns2:Contact><ns2:title/><ns2:email/><ns2:phone/><ns2:street/><ns2:city/><ns2:state/><ns2:postalCode/></ns2:Contact></ns2:lead><ns2:TraceInfo><com:processId xmlns:com="http://fbu.com/common">74a780cb-3cb2-4c0c-b67f-54de8872ded6</com:processId><com:processName xmlns:com="http://fbu.com/common">LaminexCreateSampleOrder</com:processName><com:uniqueIdentifier xmlns:com="http://fbu.com/common"/></ns2:TraceInfo></ns2:createOrderRequest></soapenv:Body>']
