@@ -7,6 +7,7 @@ import datetime
 import traceback
 import cx_Oracle
 import pandas as pd
+from urllib.parse import quote
 
 # ----------------------------------------------------------------------
 # Define directories here! (remember a / on the end of the path buddy):
@@ -471,7 +472,7 @@ def transform_exports_csv_v2(contents):
                         valid = False
 
 
-                        # custom function to try remove common syntax errors in phone nuymber:
+                        # custom function to try remove common syntax errors in phone number:
                         attempted_valid_phone = translate_to_valid_phone(phone_value)
                         print("Tried fixing the format for you, does this look okay now?:\n--->", attempted_valid_phone, "<---", sep="")
                         confirmation = input("yes/no: ")
@@ -622,64 +623,8 @@ def transform_exports_csv_v2(contents):
         print("------------------------------------------------------")
 
 
-def post_to_ConverterProxy(payload_list, UUID_list):
-    
-    print("Fetching ConverterProxy API URL credentials from file...")
-
-    if os.path.isfile(credentials_path):
-        with open(credentials_path) as file:
-            data = json.load(file)
-            url = data['converterproxy_url']
-            proxy_url = data['proxy_url']
-            proxy_username = data['proxy_username']
-            proxy_password = data['proxy_password']
-            file.close()
-            print("Credentials fetched!")
-    else:
-        print("Failed to send payload to ConverterProxy. credentials_path.json not found!")
-        return
-
-    UUID_keys = list(UUID_list.keys())
-
-    headers = {
-        "content-type": "application/text",
-        "Connection": "keep-alive",
-        # "User-Agent": "Apache-HttpClient/4.5.10 (Java/1.8.0_282)"
-        }
-
-    # http_proxy  = "http://124.248.141.10:80"
-
-    proxyDict = { 
-        "http" : "http://{}:{}@{}".format(proxy_username, proxy_password, proxy_url),
-        "https" : "http://{}:{}@{}".format(proxy_username, proxy_password, proxy_url)
-    }
-
-    # proxyDict = { 
-    #     "http" : "http://pac.zscalertwo.net/znhplmTTcVdl/fb-v1.pac",
-    #     "https" : "http://pac.zscalertwo.net/znhplmTTcVdl/fb-v1.pac"
-    # }
-
-    
-    # "https://user:password@proxyip:port"
-    print("proxyDict: ", proxyDict)
-
-    # Imitating the Apache JMeter for loop here, sending each post call out:
-
-    for i in range(len(UUID_keys)):
-        # print("UUID_keys[i] ", UUID_keys[i])
-        if UUID_keys[i] in payload_list[i]:
-            # print("payload_list[i]: ", payload_list[i])
-            post_payload = UUID_list[UUID_keys[i]] + "#" + payload_list[i]
-
-            r = requests.post(url, data = post_payload, headers=headers, proxies=proxyDict)
-            resp = r.json()
-            print("json response:", resp)
-
-            time.sleep(2)
-
-
 def translate_to_valid_phone(phone_value):
-
+    
     # remove + symbols & any space characters:
     new_phone_value = phone_value.translate({ord(i): None for i in '+ '})
 
@@ -691,6 +636,110 @@ def translate_to_valid_phone(phone_value):
 
     # print(new_phone_value)
     return new_phone_value
+
+
+def post_to_ConverterProxy(payload_list, UUID_list):
+
+    try:
+        # fetch proxy credentials from credentials.json
+        print("Fetching ConverterProxy API URL credentials from file...")
+
+        if os.path.isfile(credentials_path):
+            with open(credentials_path) as file:
+                data = json.load(file)
+                url = data['converterproxy_url']
+                proxy_url = data['proxy_url']
+                proxy_username = data['proxy_username']
+                proxy_password = data['proxy_password']
+                file.close()
+                print("Credentials fetched!")
+        else:
+            print("Failed to send payload to ConverterProxy. credentials_path.json not found!")
+            return
+
+        # get list of UUIDs we want to send HTTP requests for:
+        UUID_keys = list(UUID_list.keys())
+
+        headers = {
+            "content-type": "application/text",
+            "Connection": "keep-alive",
+            # "User-Agent": "Apache-HttpClient/4.5.10 (Java/1.8.0_282)"
+        }
+        
+        proxyDict = { 
+            "http" : "http://{}:{}@{}".format(quote(proxy_username), proxy_password, proxy_url),
+            "https" : "http://{}:{}@{}".format(quote(proxy_username), proxy_password, proxy_url)
+        }
+
+        # THIS PAGE WAS USEFUL FOR THE CODES OF SPECIAL CHARACTERS - https://secure.n-able.com/webhelp/nc_9-1-0_so_en/content/sa_docs/api_level_integration/api_integration_urlencoding.html
+        # made a backup of workspace code here if you want something from that stuff i was working on at - C:\dev\Cole\Project Notes\Laminex Ecommerce - MW Actions\misc\body and header from JMETER (cloud test).xml
+
+        # Imitating the Apache JMeter for loop here, sending each post call out:
+
+        successful_http_request_list = {}
+        failed_http_request_list = {}
+        
+        for i in range(len(UUID_keys)):
+            # print("UUID_keys[i] ", UUID_keys[i])
+            if UUID_keys[i] in payload_list[i]:
+                # print("payload_list[i]: ", payload_list[i])
+                try:
+                    print("Sending HTTP Request number {}...".format(i+1))
+
+                    post_payload = UUID_list[UUID_keys[i]] + "#" + payload_list[i]
+
+                    # url = "http://api.open-notify.org/astros.json"
+                    # post_payload = "testestsetestset"
+                    # print(url, "\n", headers, "\n", proxyDict)
+                    
+                    resp = requests.post(url, data = post_payload, headers=headers, proxies=proxyDict)
+                    resp.raise_for_status()
+                    if resp.status_code == 200:
+                        successful_http_request_list[UUID_keys[i]] = UUID_list[UUID_keys[i]]
+                        print("adding this to successful_list:", successful_http_request_list)
+                    else:
+                        failed_http_request_list[UUID_keys[i]] = UUID_list[UUID_keys[i]]
+                        print("new failed_list:", failed_http_request_list)
+
+
+                    # resp = r.json()
+                    # print("json response:", resp)
+                    # time.sleep(2) # sleep between each HTTP request
+
+                except requests.exceptions.HTTPError as errh:
+                    print("HTTP Response:\n{}\n\n".format(resp))
+                    print("ConverterProxy POST request failed on Request number {}.\nUUID: {}\nOrderNo: {}\nHTTP Error: {}".format(i+1, UUID_keys[i], UUID_list[UUID_keys[i]], errh))
+                    pass # pass makes it continue to next for loop iteration
+                except requests.exceptions.ConnectionError as errc:
+                    print("HTTP Response:\n{}\n\n".format(resp))
+                    print("ConverterProxy POST request failed on Request number {}.\nUUID: {}\nOrderNo: {}\nError Connecting: {}".format(i+1, UUID_keys[i], UUID_list[UUID_keys[i]], errc))
+                    pass # pass makes it continue to next for loop iteration
+                except requests.exceptions.Timeout as errt:
+                    print("HTTP Response:\n{}\n\n".format(resp))
+                    print("ConverterProxy POST request failed on Request number {}.\nUUID: {}\nOrderNo: {}\nTimeout Error: {}".format(i+1, UUID_keys[i], UUID_list[UUID_keys[i]], errt))
+                    pass # pass makes it continue to next for loop iteration
+                except requests.exceptions.RequestException as err:
+                    print("HTTP Response:\n{}\n\n".format(resp))
+                    print("ConverterProxy POST request failed on Request number {}.\nUUID: {}\nOrderNo: {}\nGENERIC ERROR: {}".format(i+1, UUID_keys[i], UUID_list[UUID_keys[i]], err))
+                    pass
+        
+        ### do something with failed_http_request_list here? summary print or something?
+
+        # returns list of all successful HTTP requests, next step they will be looked up to see if processed in GenericAuditService fully:
+        return successful_http_request_list
+
+    except requests.exceptions.RequestException as err:
+        print ("Failed to send payload to ConverterProxy.\n\nERROR:", err)
+            
+            
+def confirm_sent_to_waivenet(successful_http_request_list):
+    pass
+
+    # query GenericAuditService db against all these UUIDs, and check for that final SUCCESS msg in the waivenet process. 
+    # if success, all good no problem, 
+    # if failures, go into the payload value returned in the ERROR step in GenericAuditService and extract the error message that 
+    # it gave back so that I can send it to roger (Make it so the print statement prints out the UUId + orderNo + error message so i 
+    # can send it straight to roger)
 
 
 def main():
@@ -715,18 +764,18 @@ def main():
     # UUID_list = {"e18dbbd2-3c8f-47c5-bc5e-711cd9b5a8f8": "4272926"}
 
     # get list of all files inside the input_dir currently
-    file_list = list_files_in_input_dir()
-    UUID_list = fetch_UUIDs_from_csv(file_list)
+    # # # # # # file_list = list_files_in_input_dir()
+    # # # # # # UUID_list = fetch_UUIDs_from_csv(file_list)
 
-    contents = get_audit_db_original_requests(UUID_list)
-    final_payload_list = transform_exports_csv_v2(contents)
+    # # # # # # contents = get_audit_db_original_requests(UUID_list)
+    # # # # # # final_payload_list = transform_exports_csv_v2(contents)
 
-    # translate_to_valid_phone('+OOO6198 534 85asadds@(*&!(*(7')
+    UUID_list = {"74a780cb-3cb2-4c0c-b67f-54de8872ded6": "4287411", "84a780cb-3cb2-4c0c-b67f-54de8872ded6": "4287411"}
+    final_payload_list = ['74a780cb-3cb2-4c0c-b67f-54de8872ded6,4287411,<soapenv:Body xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:lam="http://fbu.com/BuildingProducts/LaminexEcomSampleProductOrchestrator" xmlns:com="http://fbu.com/common"><ns2:createOrderRequest xmlns:ns2="http://fbu.com/BuildingProducts/LaminexEcomSampleProductOrchestrator"><ns2:erpId>AU-1067063</ns2:erpId><ns2:leadId/><ns2:salesforceCompanyId>0010X00004Ry1jWQAR</ns2:salesforceCompanyId><ns2:userId>0030X00002T9uJiQAJ</ns2:userId><ns2:userName>janetgrahaminteriors@gmail.com</ns2:userName><ns2:orderNo/><ns2:phoneNumber/><ns2:orderTotal>0.0</ns2:orderTotal><ns2:optIn/><ns2:processId>ef6ab9fb-bb75-480c-8a94-3169f917cc80</ns2:processId><ns2:relatedProjectInformation>Mosman home+Residential Renovation</ns2:relatedProjectInformation><ns2:creationTime>2021-03-30T12:57:57.211GMT+11</ns2:creationTime><ns2:order><ns2:line><ns2:lineNumber>1</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4507-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>2</ns2:orderQty><ns2:description>Milano Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Milano Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>2</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0489-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Pure Cloud</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Pure Cloud</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>3</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4508-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Perla Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Perla Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>4</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0476-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Calcite</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Calcite</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>5</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0478-MAT-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Carrara</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Matte</ns2:finish><ns2:color>Carrara</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>6</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4508-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Perla Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Perla Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line></ns2:order><ns2:deliveryAddress><ns2:salutation/><ns2:businessName/><ns2:firstName>Janet</ns2:firstName><ns2:lastName>Graham</ns2:lastName><ns2:line1>2A River St</ns2:line1><ns2:line2/><ns2:line3/><ns2:line4/><ns2:city>Birchgrove</ns2:city><ns2:suburb>Birchgrove</ns2:suburb><ns2:state>NSW</ns2:state><ns2:postalCode>2041</ns2:postalCode><ns2:country/><ns2:instructions/><ns2:phone></ns2:phone></ns2:deliveryAddress><ns2:lead><ns2:firstName/><ns2:lastName/><ns2:company/><ns2:aboutMe>AnD-Interior Designer</ns2:aboutMe><ns2:emailOptIn/><ns2:contactByFabricator/><ns2:description/><ns2:Project><ns2:name/><ns2:location/></ns2:Project><ns2:Contact><ns2:title/><ns2:email/><ns2:phone/><ns2:street/><ns2:city/><ns2:state/><ns2:postalCode/></ns2:Contact></ns2:lead><ns2:TraceInfo><com:processId xmlns:com="http://fbu.com/common">74a780cb-3cb2-4c0c-b67f-54de8872ded6</com:processId><com:processName xmlns:com="http://fbu.com/common">LaminexCreateSampleOrder</com:processName><com:uniqueIdentifier xmlns:com="http://fbu.com/common"/></ns2:TraceInfo></ns2:createOrderRequest></soapenv:Body>', '84a780cb-3cb2-4c0c-b67f-54de8872ded6,4287411,<soapenv:Body xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:lam="http://fbu.com/BuildingProducts/LaminexEcomSampleProductOrchestrator" xmlns:com="http://fbu.com/common"><ns2:createOrderRequest xmlns:ns2="http://fbu.com/BuildingProducts/LaminexEcomSampleProductOrchestrator"><ns2:erpId>AU-1067063</ns2:erpId><ns2:leadId/><ns2:salesforceCompanyId>0010X00004Ry1jWQAR</ns2:salesforceCompanyId><ns2:userId>0030X00002T9uJiQAJ</ns2:userId><ns2:userName>janetgrahaminteriors@gmail.com</ns2:userName><ns2:orderNo/><ns2:phoneNumber/><ns2:orderTotal>0.0</ns2:orderTotal><ns2:optIn/><ns2:processId>ef6ab9fb-bb75-480c-8a94-3169f917cc80</ns2:processId><ns2:relatedProjectInformation>Mosman home+Residential Renovation</ns2:relatedProjectInformation><ns2:creationTime>2021-03-30T12:57:57.211GMT+11</ns2:creationTime><ns2:order><ns2:line><ns2:lineNumber>1</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4507-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>2</ns2:orderQty><ns2:description>Milano Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Milano Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>2</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0489-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Pure Cloud</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Pure Cloud</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>3</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4508-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Perla Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Perla Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>4</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0476-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Calcite</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Calcite</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>5</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0478-MAT-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Carrara</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Matte</ns2:finish><ns2:color>Carrara</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>6</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4508-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Perla Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Perla Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line></ns2:order><ns2:deliveryAddress><ns2:salutation/><ns2:businessName/><ns2:firstName>Janet</ns2:firstName><ns2:lastName>Graham</ns2:lastName><ns2:line1>2A River St</ns2:line1><ns2:line2/><ns2:line3/><ns2:line4/><ns2:city>Birchgrove</ns2:city><ns2:suburb>Birchgrove</ns2:suburb><ns2:state>NSW</ns2:state><ns2:postalCode>2041</ns2:postalCode><ns2:country/><ns2:instructions/><ns2:phone></ns2:phone></ns2:deliveryAddress><ns2:lead><ns2:firstName/><ns2:lastName/><ns2:company/><ns2:aboutMe>AnD-Interior Designer</ns2:aboutMe><ns2:emailOptIn/><ns2:contactByFabricator/><ns2:description/><ns2:Project><ns2:name/><ns2:location/></ns2:Project><ns2:Contact><ns2:title/><ns2:email/><ns2:phone/><ns2:street/><ns2:city/><ns2:state/><ns2:postalCode/></ns2:Contact></ns2:lead><ns2:TraceInfo><com:processId xmlns:com="http://fbu.com/common">74a780cb-3cb2-4c0c-b67f-54de8872ded6</com:processId><com:processName xmlns:com="http://fbu.com/common">LaminexCreateSampleOrder</com:processName><com:uniqueIdentifier xmlns:com="http://fbu.com/common"/></ns2:TraceInfo></ns2:createOrderRequest></soapenv:Body>']
 
-    # # # UUID_list = {"74a780cb-3cb2-4c0c-b67f-54de8872ded6": "4287411", "84a780cb-3cb2-4c0c-b67f-54de8872ded6": "4287411"}
-    # # # final_payload_list = ['74a780cb-3cb2-4c0c-b67f-54de8872ded6,4287411,<soapenv:Body xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:lam="http://fbu.com/BuildingProducts/LaminexEcomSampleProductOrchestrator" xmlns:com="http://fbu.com/common"><ns2:createOrderRequest xmlns:ns2="http://fbu.com/BuildingProducts/LaminexEcomSampleProductOrchestrator"><ns2:erpId>AU-1067063</ns2:erpId><ns2:leadId/><ns2:salesforceCompanyId>0010X00004Ry1jWQAR</ns2:salesforceCompanyId><ns2:userId>0030X00002T9uJiQAJ</ns2:userId><ns2:userName>janetgrahaminteriors@gmail.com</ns2:userName><ns2:orderNo/><ns2:phoneNumber/><ns2:orderTotal>0.0</ns2:orderTotal><ns2:optIn/><ns2:processId>ef6ab9fb-bb75-480c-8a94-3169f917cc80</ns2:processId><ns2:relatedProjectInformation>Mosman home+Residential Renovation</ns2:relatedProjectInformation><ns2:creationTime>2021-03-30T12:57:57.211GMT+11</ns2:creationTime><ns2:order><ns2:line><ns2:lineNumber>1</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4507-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>2</ns2:orderQty><ns2:description>Milano Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Milano Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>2</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0489-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Pure Cloud</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Pure Cloud</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>3</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4508-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Perla Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Perla Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>4</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0476-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Calcite</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Calcite</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>5</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0478-MAT-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Carrara</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Matte</ns2:finish><ns2:color>Carrara</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>6</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4508-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Perla Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Perla Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line></ns2:order><ns2:deliveryAddress><ns2:salutation/><ns2:businessName/><ns2:firstName>Janet</ns2:firstName><ns2:lastName>Graham</ns2:lastName><ns2:line1>2A River St</ns2:line1><ns2:line2/><ns2:line3/><ns2:line4/><ns2:city>Birchgrove</ns2:city><ns2:suburb>Birchgrove</ns2:suburb><ns2:state>NSW</ns2:state><ns2:postalCode>2041</ns2:postalCode><ns2:country/><ns2:instructions/><ns2:phone></ns2:phone></ns2:deliveryAddress><ns2:lead><ns2:firstName/><ns2:lastName/><ns2:company/><ns2:aboutMe>AnD-Interior Designer</ns2:aboutMe><ns2:emailOptIn/><ns2:contactByFabricator/><ns2:description/><ns2:Project><ns2:name/><ns2:location/></ns2:Project><ns2:Contact><ns2:title/><ns2:email/><ns2:phone/><ns2:street/><ns2:city/><ns2:state/><ns2:postalCode/></ns2:Contact></ns2:lead><ns2:TraceInfo><com:processId xmlns:com="http://fbu.com/common">74a780cb-3cb2-4c0c-b67f-54de8872ded6</com:processId><com:processName xmlns:com="http://fbu.com/common">LaminexCreateSampleOrder</com:processName><com:uniqueIdentifier xmlns:com="http://fbu.com/common"/></ns2:TraceInfo></ns2:createOrderRequest></soapenv:Body>', '84a780cb-3cb2-4c0c-b67f-54de8872ded6,4287411,<soapenv:Body xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:lam="http://fbu.com/BuildingProducts/LaminexEcomSampleProductOrchestrator" xmlns:com="http://fbu.com/common"><ns2:createOrderRequest xmlns:ns2="http://fbu.com/BuildingProducts/LaminexEcomSampleProductOrchestrator"><ns2:erpId>AU-1067063</ns2:erpId><ns2:leadId/><ns2:salesforceCompanyId>0010X00004Ry1jWQAR</ns2:salesforceCompanyId><ns2:userId>0030X00002T9uJiQAJ</ns2:userId><ns2:userName>janetgrahaminteriors@gmail.com</ns2:userName><ns2:orderNo/><ns2:phoneNumber/><ns2:orderTotal>0.0</ns2:orderTotal><ns2:optIn/><ns2:processId>ef6ab9fb-bb75-480c-8a94-3169f917cc80</ns2:processId><ns2:relatedProjectInformation>Mosman home+Residential Renovation</ns2:relatedProjectInformation><ns2:creationTime>2021-03-30T12:57:57.211GMT+11</ns2:creationTime><ns2:order><ns2:line><ns2:lineNumber>1</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4507-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>2</ns2:orderQty><ns2:description>Milano Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Milano Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>2</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0489-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Pure Cloud</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Pure Cloud</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>3</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4508-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Perla Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Perla Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>4</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0476-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Calcite</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Calcite</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>5</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM0478-MAT-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Carrara</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Matte</ns2:finish><ns2:color>Carrara</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line><ns2:line><ns2:lineNumber>6</ns2:lineNumber><ns2:productCode>993180</ns2:productCode><ns2:sampleProductCode>LAM4508-GLS-LS-12x6</ns2:sampleProductCode><ns2:price>0.0</ns2:price><ns2:orderQty>1</ns2:orderQty><ns2:description>Perla Venato Gloss</ns2:description><ns2:deliveryType>STANDARD</ns2:deliveryType><ns2:marketingRange>Essastone</ns2:marketingRange><ns2:size>120x60x3mm</ns2:size><ns2:finish>Gloss</ns2:finish><ns2:color>Perla Venato</ns2:color><ns2:brand>Essastone</ns2:brand><ns2:categoryCode>993180</ns2:categoryCode></ns2:line></ns2:order><ns2:deliveryAddress><ns2:salutation/><ns2:businessName/><ns2:firstName>Janet</ns2:firstName><ns2:lastName>Graham</ns2:lastName><ns2:line1>2A River St</ns2:line1><ns2:line2/><ns2:line3/><ns2:line4/><ns2:city>Birchgrove</ns2:city><ns2:suburb>Birchgrove</ns2:suburb><ns2:state>NSW</ns2:state><ns2:postalCode>2041</ns2:postalCode><ns2:country/><ns2:instructions/><ns2:phone></ns2:phone></ns2:deliveryAddress><ns2:lead><ns2:firstName/><ns2:lastName/><ns2:company/><ns2:aboutMe>AnD-Interior Designer</ns2:aboutMe><ns2:emailOptIn/><ns2:contactByFabricator/><ns2:description/><ns2:Project><ns2:name/><ns2:location/></ns2:Project><ns2:Contact><ns2:title/><ns2:email/><ns2:phone/><ns2:street/><ns2:city/><ns2:state/><ns2:postalCode/></ns2:Contact></ns2:lead><ns2:TraceInfo><com:processId xmlns:com="http://fbu.com/common">74a780cb-3cb2-4c0c-b67f-54de8872ded6</com:processId><com:processName xmlns:com="http://fbu.com/common">LaminexCreateSampleOrder</com:processName><com:uniqueIdentifier xmlns:com="http://fbu.com/common"/></ns2:TraceInfo></ns2:createOrderRequest></soapenv:Body>']
+    successful_http_request_list = post_to_ConverterProxy(final_payload_list, UUID_list)
 
-    # # # post_to_ConverterProxy(final_payload_list, UUID_list)
+    confirm_sent_to_waivenet(successful_http_request_list)
 
     # file_list = list_files_in_input_dir()
     # for filename in file_list:
