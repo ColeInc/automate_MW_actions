@@ -24,13 +24,15 @@ credentials_path = 'C:/dev/Cole/Project Notes/Laminex Ecommerce - MW Actions/@ P
 oracle_client_location = "C:/dev/Program Files/instantclient_19_10/"
 # ----------------------------------------------------------------------
 
+cx_Oracle.init_oracle_client(oracle_client_location) # specify the directory containing Oracle Instant Client libraries. Refer to here - https://cx-oracle.readthedocs.io/en/latest/user_guide/initialization.html#using-cx-oracle-init-oracle-client-to-set-the-oracle-client-directory
+
 
 def fetch_UUIDs_from_csv(file_list):
 
     final_UUID_dict = {}
 
     for filename in file_list:
-    
+
         if filename[0] == "~":
             continue
         # print(filename)
@@ -51,19 +53,19 @@ def fetch_UUIDs_from_csv(file_list):
                 elif str(df1.iloc[row, col]) in valid_orderNo_headings: # finding the column heading for the Order # column
                     # print("orderNo HEADER CELL ---->", row, col)
                     orderNo_header_cell += [row, col]
-        
+
         # for i in the ROW value inside UUID_header_cell minus 1, iterate and print the row, col of only the 1 column we found under it. print the value with iloc.
-        
+
         for i in range(df1.shape[0] - (UUID_header_cell[0]+1)):
 
             # print("cell we are looking up:", i+UUID_header_cell[0]+1, UUID_header_cell[1])
             current_uuid = df1.iloc[i+UUID_header_cell[0]+1, UUID_header_cell[1]]
-            
+
             # print("cell we are looking up v2:", i+orderNo_header_cell[0]+1, orderNo_header_cell[1])
             current_orderNo = str(df1.iloc[i+orderNo_header_cell[0]+1, orderNo_header_cell[1]])
 
             final_UUID_dict[current_uuid] = current_orderNo
-        
+
     print("final_UUID_dict: ", final_UUID_dict)
     return final_UUID_dict
 
@@ -93,7 +95,7 @@ def get_audit_db_original_requests(UUIDs):
     try:
         print("Querying middleware database...")
         conn_str = '{0}/{1}@{2}:{3}/{4}'.format(username, password, hostname, port, service_name)
-        cx_Oracle.init_oracle_client(oracle_client_location)
+        # cx_Oracle.init_oracle_client(oracle_client_location)
         con = cx_Oracle.connect(conn_str)
         cursor = con.cursor()
 
@@ -166,10 +168,13 @@ def get_audit_db_original_requests(UUIDs):
         return None
 
     finally: # closing db connection (found this is very important!)
-        if cursor:
-            cursor.close()
-        if con:
-            con.close()
+        try:
+            if cursor:
+                cursor.close()
+            if con:
+                con.close()
+        except:
+            print("Didn't need to close db connections.")
 
 
 def list_files_in_input_dir():
@@ -629,7 +634,7 @@ def transform_exports_csv_v2(contents):
 
 
 def translate_to_valid_phone(phone_value):
-    
+
     # remove + symbols & any space characters:
     new_phone_value = phone_value.translate({ord(i): None for i in '+ '})
 
@@ -670,18 +675,18 @@ def post_to_ConverterProxy(payload_list, UUID_list):
             "Connection": "keep-alive",
             # "User-Agent": "Apache-HttpClient/4.5.10 (Java/1.8.0_282)"
         }
-        
+
         # encoding any special characters in proxy username/password:
         proxy_username = urllib.parse.quote_plus(proxy_username).encode()
         proxy_password = urllib.parse.quote_plus(proxy_password).encode()
-        
-        proxyDict = { 
+
+        proxyDict = {
             "http" : "http://{}:{}@{}".format(proxy_username, proxy_password, proxy_url),
             "https" : "http://{}:{}@{}".format(proxy_username, proxy_password, proxy_url)
         }
 
         # print("URL:", url, "\nHeaders:", headers, "\nProxy Settings:", proxyDict)
-        
+
         # THIS PAGE WAS USEFUL FOR THE CODES OF SPECIAL CHARACTERS - https://secure.n-able.com/webhelp/nc_9-1-0_so_en/content/sa_docs/api_level_integration/api_integration_urlencoding.html
         # made a backup of workspace code here if you want something from that stuff i was working on at - C:\dev\Cole\Project Notes\Laminex Ecommerce - MW Actions\misc\body and header from JMETER (cloud test).xml
 
@@ -689,7 +694,7 @@ def post_to_ConverterProxy(payload_list, UUID_list):
         failed_http_request_list = {}
 
         # Imitating the Apache JMeter for loop here, sending each post call out:
-        
+
         for i in range(len(UUID_keys)):
             # print("UUID_keys[i] ", UUID_keys[i])
             if UUID_keys[i] in payload_list[i]:
@@ -697,8 +702,10 @@ def post_to_ConverterProxy(payload_list, UUID_list):
                 try:
                     print("Sending HTTP Request number {}...".format(i+1))
 
-                    post_payload = UUID_list[UUID_keys[i]] + "#" + payload_list[i]
-                    
+                    payload_split = payload_list[i].split(",")
+                    post_payload = UUID_list[UUID_keys[i]] + "#" + payload_split[2]
+                    print("Final payload:\n", post_payload)
+
                     resp = requests.post(url, data = post_payload, headers=headers, proxies=proxyDict)
                     if resp.status_code == 200:
                         successful_http_request_list[UUID_keys[i]] = UUID_list[UUID_keys[i]]
@@ -729,7 +736,7 @@ def post_to_ConverterProxy(payload_list, UUID_list):
                     print("HTTP Response:\n{}\n\n".format(resp))
                     print("ConverterProxy POST request failed on Request number {}.\nUUID: {}\nOrderNo: {}\nGENERIC ERROR: {}".format(i+1, UUID_keys[i], UUID_list[UUID_keys[i]], err))
                     pass
-        
+
         ### do something with failed_http_request_list here? summary print or something?
 
         # returns list of all successful HTTP requests, next step they will be looked up to see if processed in GenericAuditService fully:
@@ -738,11 +745,17 @@ def post_to_ConverterProxy(payload_list, UUID_list):
     except requests.exceptions.RequestException as err:
         print ("Failed to send payload to ConverterProxy.\n\nFAILED WITH ERROR:", err)
         return
-            
-            
+
+
 def confirm_sent_to_waivenet(successful_http_request_list):
 
     print("original success list:", successful_http_request_list)
+
+    # check for 0 records passed in:
+    if len(successful_http_request_list) < 1:
+        print("no successful records to Waivenet to check. Finishing automate_MW_actions.")
+        print("\n...automate_MW_actions complete!")
+        return
 
     ### Fetch database credentials:
 
@@ -765,15 +778,15 @@ def confirm_sent_to_waivenet(successful_http_request_list):
 
         ### Query Oracle db for audit logs:
 
-        print("Querying middleware database...")
+        print("Querying middleware database for waivenet confirmations...")
         conn_str = '{0}/{1}@{2}:{3}/{4}'.format(username, password, hostname, port, service_name)
-        cx_Oracle.init_oracle_client(oracle_client_location)
+        # cx_Oracle.init_oracle_client(oracle_client_location)
         con = cx_Oracle.connect(conn_str)
         cursor = con.cursor()
 
         # give some time for the good old GenericAuditService to finish her work :')
-        print("giving some time for the good old GenericAuditService to finish her work...")
-        for i in range(2): # decrease this if it works every time
+        print("\ngiving some time for the good old GenericAuditService to finish her work...")
+        for i in range(10): # decrease this if it works every time
             # print("{}...".format(i+1))
             print(str(i+1), "." * (i+1), sep="")
             time.sleep(1)
@@ -781,7 +794,7 @@ def confirm_sent_to_waivenet(successful_http_request_list):
 
         # get list of UUIDs we want to query in GenericAuditService db:
         UUID_keys = list(successful_http_request_list.keys())
-        
+
         # Check for final SUCCESS msg in the waivenet process:
 
         format_strings = ','.join(["'%s'"] * len(UUID_keys)) # creates template of comma separated %s that is n values long depending how many UUIDs we are searching
@@ -792,13 +805,13 @@ def confirm_sent_to_waivenet(successful_http_request_list):
         '''  % (format_strings) % tuple(UUID_keys)
         cursor.execute(sql)
 
-        print("Waivenet SELECT v1 for SUCCESS records performed successfully.")
+        print("Waivenet SELECT v1 for SUCCESS records performed successfully.\n")
 
         # iterate each line of db response, match with ones in OG dict, filter the ones that aren't in there and do the FAILED query for them.
 
         error_list = []
 
-        
+
         for row in cursor:
             if row[0] in UUID_keys:
                 # print("\nUUID: ", row[0], "\nPayload: ", row[1], sep="")
@@ -808,13 +821,13 @@ def confirm_sent_to_waivenet(successful_http_request_list):
 
         # for testing
         # error_list = ["45997504-165b-4f2a-8e21-116dcc105458", "84a780cb-3cb2-4c0c-b67f-54de8872ded6"]
-        
+
         if len(error_list) > 0:
-            
+
             print("\nErrors found in GenericAuditService db - when sending to Waivenet.\nSearching for errors on these records:\n", error_list)
-            
+
             # query Audit db for failed records and try fetch the error msgs from the response back from Waivenet:
-            
+
             format_strings = ','.join(["'%s'"] * len(error_list))
             sql = '''
             SELECT correlation_id,payload FROM audit_log_details
@@ -822,27 +835,30 @@ def confirm_sent_to_waivenet(successful_http_request_list):
             AND correlation_id in (%s) ORDER BY LOGTIME DESC
             '''  % (format_strings) % tuple(error_list)
             cursor.execute(sql)
-            
+
             print("SQL v2 for ERROR messages was successful.")
-            
+
             for row in cursor:
                 print("--------------------\nFound this info on the order that failed to re-process:\\nnFailed UUID: ", row[0], "\nFailed OrderNo: ", successful_http_request_list[row[0]], "\nERROR payload:\n", row[1], "\n", sep="")
 
                 # could make some logic here like, if couldn't find a db result for a UUID in error_list, then print out which one we couldn't find any details for.
-                
+
                 # # extract the error msg itself from payload here:
                 # wip...
-        
+
         print("\n...automate_MW_actions complete!")
         return
 
     except cx_Oracle.DatabaseError as e:
         print("Error in Oracle Database Query:\n\n", e, "\n", sep="")
     finally: # closing db connection
-        if cursor:
-            cursor.close()
-        if con:
-            con.close()
+        try:
+            if cursor:
+                cursor.close()
+            if con:
+                con.close()
+        except:
+            print("Didn't need to close db connections.")
 
 
 def main():
@@ -871,7 +887,8 @@ def main():
 
     # # # # # successful_http_request_list = post_to_ConverterProxy(final_payload_list, UUID_list)
 
-    # # # # # confirm_sent_to_waivenet(successful_http_request_list)
+    successful_http_request_list = {'e6098466-f3b1-400c-9c37-8495f7aaf645': '4449958'}
+    confirm_sent_to_waivenet(successful_http_request_list)
 
     # file_list = list_files_in_input_dir()
     # for filename in file_list:
@@ -880,15 +897,15 @@ def main():
     # transform_exports_csv('cats.csv')
 
     # get list of all files inside the input_dir currently
-    file_list = list_files_in_input_dir()
-    if file_list == False: # if 0 files found, finish process.
-        return
-    UUID_list = fetch_UUIDs_from_csv(file_list)
+    # # # # # # file_list = list_files_in_input_dir()
+    # # # # # # if file_list == False: # if 0 files found, finish process.
+    # # # # # #     return
+    # # # # # # UUID_list = fetch_UUIDs_from_csv(file_list)
 
-    contents = get_audit_db_original_requests(UUID_list)
-    final_payload_list = transform_exports_csv_v2(contents)
+    # # # # # # contents = get_audit_db_original_requests(UUID_list)
+    # # # # # # final_payload_list = transform_exports_csv_v2(contents)
 
-    successful_http_request_list = post_to_ConverterProxy(final_payload_list, UUID_list)
-    confirm_sent_to_waivenet(successful_http_request_list)
+    # # # # # # successful_http_request_list = post_to_ConverterProxy(final_payload_list, UUID_list)
+    # # # # # # confirm_sent_to_waivenet(successful_http_request_list)
 
 main()
