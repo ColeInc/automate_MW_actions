@@ -700,16 +700,18 @@ def post_to_ConverterProxy(payload_list, UUID_list):
             if UUID_keys[i] in payload_list[i]:
                 # print("payload_list[i]: ", payload_list[i])
                 try:
-                    print("Sending HTTP Request number {}...".format(i+1))
+                    print("sending HTTP Request number {}...".format(i+1))
 
                     payload_split = payload_list[i].split(",")
                     post_payload = UUID_list[UUID_keys[i]] + "#" + payload_split[2]
-                    print("Final payload:\n", post_payload)
+                    # print("Final payload:\n", post_payload)
 
                     resp = requests.post(url, data = post_payload, headers=headers, proxies=proxyDict)
+                    print("waiting for response from waivenet...")
+
                     if resp.status_code == 200:
+                        print("successful response from waivenet!")
                         successful_http_request_list[UUID_keys[i]] = UUID_list[UUID_keys[i]]
-                        print("adding this to successful_list:", successful_http_request_list)
 
                         # resp = r.json()
                         # print("json response:", resp)
@@ -887,8 +889,8 @@ def main():
 
     # # # # # successful_http_request_list = post_to_ConverterProxy(final_payload_list, UUID_list)
 
-    successful_http_request_list = {'e6098466-f3b1-400c-9c37-8495f7aaf645': '4449958'}
-    confirm_sent_to_waivenet(successful_http_request_list)
+    # successful_http_request_list = {'e6098466-f3b1-400c-9c37-8495f7aaf645': '4449958'}
+    # confirm_sent_to_waivenet(successful_http_request_list)
 
     # file_list = list_files_in_input_dir()
     # for filename in file_list:
@@ -897,15 +899,15 @@ def main():
     # transform_exports_csv('cats.csv')
 
     # get list of all files inside the input_dir currently
-    # # # # # # file_list = list_files_in_input_dir()
-    # # # # # # if file_list == False: # if 0 files found, finish process.
-    # # # # # #     return
-    # # # # # # UUID_list = fetch_UUIDs_from_csv(file_list)
+    file_list = list_files_in_input_dir()
+    if file_list == False: # if 0 files found, finish process.
+        return
+    UUID_list = fetch_UUIDs_from_csv(file_list)
 
-    # # # # # # contents = get_audit_db_original_requests(UUID_list)
-    # # # # # # final_payload_list = transform_exports_csv_v2(contents)
+    contents = get_audit_db_original_requests(UUID_list)
+    final_payload_list = transform_exports_csv_v2(contents)
 
-    # # # # # # successful_http_request_list = post_to_ConverterProxy(final_payload_list, UUID_list)
-    # # # # # # confirm_sent_to_waivenet(successful_http_request_list)
+    successful_http_request_list = post_to_ConverterProxy(final_payload_list, UUID_list)
+    confirm_sent_to_waivenet(successful_http_request_list)
 
 main()
