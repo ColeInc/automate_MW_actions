@@ -24,7 +24,7 @@ credentials_path = 'C:/dev/Cole/Project Notes/Laminex Ecommerce - MW Actions/@ P
 oracle_client_location = "C:/dev/Program Files/instantclient_19_10/"
 # ----------------------------------------------------------------------
 
-cx_Oracle.init_oracle_client(oracle_client_location) # specify the directory containing Oracle Instant Client libraries. Refer to here - https://cx-oracle.readthedocs.io/en/latest/user_guide/initialization.html#using-cx-oracle-init-oracle-client-to-set-the-oracle-client-directory
+cx_Oracle.init_oracle_client(oracle_client_location) # specifies the directory containing Oracle Instant Client libraries. Refer to here - https://cx-oracle.readthedocs.io/en/latest/user_guide/initialization.html#using-cx-oracle-init-oracle-client-to-set-the-oracle-client-directory
 
 
 def fetch_UUIDs_from_csv(file_list):
@@ -126,13 +126,14 @@ def get_audit_db_original_requests(UUIDs):
 
         print("final successful_UUIDs_list: ", successful_UUIDs_list) # delete
         # if UUiD is in OG list but not in successful_UUIDs_list, add it to failed_UUIDs (ALONG WITH ITS ORDERNO):
-
+                
         if total_records == len(successful_UUIDs_list):
             print("final_file: ", final_file)
             return final_file
         else:
             for key in UUIDs:
                 value = UUIDs[key]
+
                 if key not in successful_UUIDs_list: # if the UUID was not successfully fetched in the first db query, add it to failed_UUIDs dict
                     failed_UUIDs[key] = value
 
@@ -638,8 +639,8 @@ def translate_to_valid_phone(phone_value):
     # remove + symbols & any space characters:
     new_phone_value = phone_value.translate({ord(i): None for i in '+ '})
 
-    # convert capital O's to 0s
-    new_phone_value = re.sub("[O]", "0", new_phone_value)
+    # convert capital O's to 0s (or lowercase):
+    new_phone_value = re.sub("[O]", "0", new_phone_value.upper())
 
     # remove all non-numeric values for whatever reason they made it in:
     new_phone_value = re.sub("[^0-9]", "", new_phone_value)
@@ -649,6 +650,9 @@ def translate_to_valid_phone(phone_value):
 
 
 def post_to_ConverterProxy(payload_list, UUID_list):
+    
+    # print("original post_to_ConverterProxy payload_list:", payload_list) # delete me:
+    # print("original post_to_ConverterProxy UUID_list:", UUID_list) # delete me:
 
     try:
         # fetch proxy credentials from credentials.json
@@ -667,9 +671,11 @@ def post_to_ConverterProxy(payload_list, UUID_list):
             print("Failed to send payload to ConverterProxy. credentials_path.json not found!")
             return
 
-        # get list of UUIDs we want to send HTTP requests for:
-        UUID_keys = list(UUID_list.keys())
-
+        # get list of UUIDs we want to send HTTP requests for (important to sort them for matching next):
+        UUID_keys = sorted(list(UUID_list.keys()))
+        # sort payload list by UUID for matching next
+        payload_list = sorted(payload_list)
+        
         headers = {
             "content-type": "application/text",
             "Connection": "keep-alive",
@@ -696,7 +702,9 @@ def post_to_ConverterProxy(payload_list, UUID_list):
         # Imitating the Apache JMeter for loop here, sending each post call out:
 
         for i in range(len(UUID_keys)):
-            # print("UUID_keys[i] ", UUID_keys[i])
+            print("UUID_keys[i]: ", UUID_keys[i])
+            print("if condition: ", UUID_keys[i] in payload_list[i])
+
             if UUID_keys[i] in payload_list[i]:
                 # print("payload_list[i]: ", payload_list[i])
                 try:
@@ -751,7 +759,7 @@ def post_to_ConverterProxy(payload_list, UUID_list):
 
 def confirm_sent_to_waivenet(successful_http_request_list):
 
-    print("original success list:", successful_http_request_list)
+    # print("original success list:", successful_http_request_list)
 
     # check for 0 records passed in:
     if len(successful_http_request_list) < 1:
@@ -780,7 +788,7 @@ def confirm_sent_to_waivenet(successful_http_request_list):
 
         ### Query Oracle db for audit logs:
 
-        print("Querying middleware database for waivenet confirmations...")
+        print("Querying middleware db for waivenet confirmations...")
         conn_str = '{0}/{1}@{2}:{3}/{4}'.format(username, password, hostname, port, service_name)
         # cx_Oracle.init_oracle_client(oracle_client_location)
         con = cx_Oracle.connect(conn_str)
@@ -789,7 +797,6 @@ def confirm_sent_to_waivenet(successful_http_request_list):
         # give some time for the good old GenericAuditService to finish her work :')
         print("\ngiving some time for the good old GenericAuditService to finish her work...")
         for i in range(10): # decrease this if it works every time
-            # print("{}...".format(i+1))
             print(str(i+1), "." * (i+1), sep="")
             time.sleep(1)
         print("warmed up!")
