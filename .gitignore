@@ -8,3 +8,4 @@ output_dir/
 archive_dir/
 Backups/
 credentials.json
+paste_manual_payload.py

@@ -139,26 +139,38 @@ def get_audit_db_original_requests(UUIDs):
 
         ### backup query if nothing was returned for one of the UUIDs:
 
-        # change this to actual list of failed UUIDs:
+        # testing - failed UUIDs:
         # failed_UUIDs = ['bd4cc1fc-81f7-4aa8-9172-98e30e56dd89', 'ef5980b7-eebb-4dfc-8d31-20239fd8dbef']
         # failed_UUIDs = {"bd4cc1fc-81f7-4aa8-9172-98e30e56dd89": "4223885", "ef5980b7-eebb-4dfc-8d31-20239fd8dbef": "4223890"}
 
         # could maybe just iterate the corresponding orderNo's at the final for loop printing the values below.
 
         format_strings = ','.join(["'%s'"] * len(failed_UUIDs)) # creates template of comma separated %s that is n values long depending how many UUIDs we are searching
+        #### OG one with 2 phases (causes duplicates in response sometimes)
+        # # # sql = '''
+        # # # SELECT correlation_id, payload FROM audit_log_details
+        # # # WHERE STATE = 'START' and (PHASE = 'CREATESAMPLORDR-ORCH' or PHASE = 'CREATESAMPLEORDERORC')
+        # # # and correlation_id in (%s) order by correlation_id
+        # # # '''  % format_strings % tuple(failed_UUIDs.keys())
+
         sql = '''
         SELECT correlation_id, payload FROM audit_log_details
-        WHERE STATE = 'START' and (PHASE = 'CREATESAMPLORDR-ORCH' or PHASE = 'CREATESAMPLEORDERORC')
+        WHERE STATE = 'START' and (PHASE = 'CREATESAMPLORDR-ORCH')
         and correlation_id in (%s) order by correlation_id
         '''  % format_strings % tuple(failed_UUIDs.keys())
-        cursor.execute(sql)
 
+        cursor.execute(sql)
         count = 0
         values_list = list(failed_UUIDs.values())
         for row in cursor:
-            print("UUID: ", row[0], "\nOrderNo: ", values_list[count], "\nPayload: ", row[1], sep="")
-            final_file += str(row[0]) + "," + str(values_list[count]) + "," + str(row[1]) + "\n"
-            count += 1
+            try:
+                # print("UUID: ", row[0], "\nOrderNo: ", values_list[count], "\nPayload: ", row[1], sep="")
+                final_file += str(row[0]) + "," + str(values_list[count]) + "," + str(row[1]) + "\n"
+                count += 1
+            except:
+                print("THIS ONE DOESN'T HAVE A PAYLOAD:")
+                print("UUID: ", row[0])
+
 
         print("Database SELECT v2 performed successfully")
         print("final_file: ", final_file)
@@ -702,8 +714,7 @@ def post_to_ConverterProxy(payload_list, UUID_list):
         # Imitating the Apache JMeter for loop here, sending each post call out:
 
         for i in range(len(UUID_keys)):
-            print("UUID_keys[i]: ", UUID_keys[i])
-            print("if condition: ", UUID_keys[i] in payload_list[i])
+            # print("UUID_keys[i]: ", UUID_keys[i])
 
             if UUID_keys[i] in payload_list[i]:
                 # print("payload_list[i]: ", payload_list[i])
@@ -714,7 +725,7 @@ def post_to_ConverterProxy(payload_list, UUID_list):
                     post_payload = UUID_list[UUID_keys[i]] + "#" + payload_split[2]
                     # print("Final payload:\n", post_payload)
 
-                    resp = requests.post(url, data = post_payload, headers=headers, proxies=proxyDict)
+                    resp = requests.post(url, data = post_payload.encode('utf-8'), headers=headers, proxies=proxyDict)
                     print("waiting for response from waivenet...")
 
                     if resp.status_code == 200:
@@ -744,6 +755,10 @@ def post_to_ConverterProxy(payload_list, UUID_list):
                     pass # pass makes it continue to next for loop iteration
                 except requests.exceptions.RequestException as err:
                     print("HTTP Response:\n{}\n\n".format(resp))
+                    print("ConverterProxy POST request failed on Request number {}.\nUUID: {}\nOrderNo: {}\RequestException Error: {}".format(i+1, UUID_keys[i], UUID_list[UUID_keys[i]], err))
+                    pass
+                except Exception as err:
+                    print("HTTP Response:\n{}\n\n".format(resp))
                     print("ConverterProxy POST request failed on Request number {}.\nUUID: {}\nOrderNo: {}\nGENERIC ERROR: {}".format(i+1, UUID_keys[i], UUID_list[UUID_keys[i]], err))
                     pass
 
@@ -752,8 +767,8 @@ def post_to_ConverterProxy(payload_list, UUID_list):
         # returns list of all successful HTTP requests, next step they will be looked up to see if processed in GenericAuditService fully:
         return successful_http_request_list
 
-    except requests.exceptions.RequestException as err:
-        print ("Failed to send payload to ConverterProxy.\n\nFAILED WITH ERROR:", err)
+    except Exception as e:
+        print ("Failed to send payload to ConverterProxy.\n\nFAILED WITH ERROR:", e)
         return
 
 
