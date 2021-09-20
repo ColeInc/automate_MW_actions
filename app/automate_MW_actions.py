@@ -3,6 +3,7 @@ import re
 import json
 import time
 import urllib
+from numpy import NaN
 import requests
 import datetime
 import traceback
@@ -64,7 +65,9 @@ def fetch_UUIDs_from_csv(file_list):
             # print("cell we are looking up v2:", i+orderNo_header_cell[0]+1, orderNo_header_cell[1])
             current_orderNo = str(df1.iloc[i+orderNo_header_cell[0]+1, orderNo_header_cell[1]])
 
-            final_UUID_dict[current_uuid] = current_orderNo
+            # Check for any NaN values (usually produced by blank rows in spreadsheet). Filters any out if found.
+            if not(current_uuid != current_uuid):
+                final_UUID_dict[current_uuid] = current_orderNo
 
     print("final_UUID_dict: ", final_UUID_dict)
     return final_UUID_dict
@@ -244,7 +247,7 @@ def transform_exports_csv(filename):
                 # line = 'this is a string where the substring "<ns2:phone/>" is repeated several <ns2:phoneNumber/>yeet</ns2:phoneNumber> times'
                 # --------------------------
 
-                yes_list = ['yes', 'ya', 'yep', 'yes pls', 'yas', 'ye', 'y', 'yes!']
+                yes_list = ['yes', 'ya', 'yep', 'yes pls', 'yas', 'ye', 'y', 'yes!', 'yup']
                 no_list = ['no', 'n', 'nah', 'na', 'nope', 'no thanks']
                 final_removed_commas = ""
                 line_num = 1
@@ -663,8 +666,8 @@ def translate_to_valid_phone(phone_value):
 
 def post_to_ConverterProxy(payload_list, UUID_list):
     
-    # print("original post_to_ConverterProxy payload_list:", payload_list) # delete me:
-    # print("original post_to_ConverterProxy UUID_list:", UUID_list) # delete me:
+    print("original post_to_ConverterProxy payload_list:", payload_list) # delete me
+    print("original post_to_ConverterProxy UUID_list:", UUID_list) # delete me
 
     try:
         # fetch proxy credentials from credentials.json
@@ -717,7 +720,7 @@ def post_to_ConverterProxy(payload_list, UUID_list):
             # print("UUID_keys[i]: ", UUID_keys[i])
 
             if UUID_keys[i] in payload_list[i]:
-                # print("payload_list[i]: ", payload_list[i])
+                # print("x --> payload_list[i]: ", payload_list[i])
                 try:
                     print("sending HTTP Request number {}...".format(i+1))
 
@@ -768,8 +771,7 @@ def post_to_ConverterProxy(payload_list, UUID_list):
         return successful_http_request_list
 
     except Exception as e:
-        print ("Failed to send payload to ConverterProxy.\n\nFAILED WITH ERROR:", e)
-        return
+        print ("Failed to send payload to ConverterProxy.\n\nFAILED WITH ERROR:\n", e)
 
 
 def confirm_sent_to_waivenet(successful_http_request_list):
